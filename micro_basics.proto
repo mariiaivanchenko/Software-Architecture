@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package micro_basics;
+
+service LoggingService {
+  rpc Get (Empty) returns (Messages);
+  rpc Post (Message) returns (Response);
+}
+
+message Empty {}  
+
+message Messages {
+  repeated string messages = 1;
+}
+
+message Message {
+  string uuid = 1;
+  string message = 2;
+}
+
+message Response {
+  string message = 1;
+  int32 status_code = 2;
+}
