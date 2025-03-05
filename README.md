@@ -1,2 +1,2 @@
-# Software-Architecture-Task1
-Task1: Microservices Basics
+# Software-Architecture-Task2
+Task2: Hazelcast
