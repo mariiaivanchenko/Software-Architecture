@@ -1,0 +1,10 @@
+@FACADE_URL = http://127.0.0.1:5000/facade-service
+
+### POST request for facade-service
+POST {{FACADE_URL}}
+Content-Type: text/plain
+
+msg08
+
+### GET request for facade-service
+GET {{FACADE_URL}}
