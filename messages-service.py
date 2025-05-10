@@ -1,8 +1,10 @@
 import json
+import atexit
 import threading
 import configparser
 from flask import Flask
 from kafka import KafkaConsumer
+from utils import register_service, deregister_service, read_element_kv
 
 app = Flask(__name__)
 db = {}
@@ -10,12 +12,14 @@ db = {}
 config = configparser.ConfigParser()
 config.read("configuration.ini")
 
-TOPIC_NAME = config.get("KAFKA", "TOPIC_NAME")
 MEMBER_ID = int(config.get("KAFKA", "MEMBER_ID"))
+MESSAGES_PORT = int(config.get("PORTS", "MESSAGES_PORT"))
+TOPIC_NAME = read_element_kv("app/kafka/topic-name")
+BOOTSTRAP_SERVERS = read_element_kv("app/kafka/bootstrap-servers").split(",")
 
 consumer = KafkaConsumer(
     TOPIC_NAME,
-    bootstrap_servers=["localhost:29092", "localhost:39092", "localhost:49092"],
+    bootstrap_servers= BOOTSTRAP_SERVERS, 
     group_id=f"message_service{MEMBER_ID}_group",
     enable_auto_commit=True,
     auto_offset_reset="earliest",
@@ -35,6 +39,14 @@ def consume_messages():
         db[uuid] = message
 
 threading.Thread(target=consume_messages, daemon=True).start()
+
+register_service("messages-service", MEMBER_ID, MESSAGES_PORT + MEMBER_ID - 1)
+atexit.register(
+    lambda: deregister_service(
+        "messages-service", MEMBER_ID, MESSAGES_PORT + MEMBER_ID - 1
+    )
+)
+
 
 @app.route("/messages-service", methods=["GET"])
 def get():

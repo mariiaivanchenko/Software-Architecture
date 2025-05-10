@@ -1,23 +1,29 @@
 import uuid
 import json
-import requests
+import atexit
 import random
+import requests
 import configparser
+from consul import Consul
 from kafka import KafkaProducer
 from flask import Flask, request
+from utils import register_service, deregister_service, read_element_kv
 
 app = Flask(__name__)
 
 config = configparser.ConfigParser()
 config.read("configuration.ini")
-CONFIG_URL = config.get("URLS", "CONFIG_URL")
-TOPIC_NAME = config.get("KAFKA", "TOPIC_NAME")
+FACADE_PORT = int(config.get("PORTS", "FACADE_PORT"))
+TOPIC_NAME = read_element_kv("app/kafka/topic-name")
+BOOTSTRAP_SERVERS = read_element_kv("app/kafka/bootstrap-servers").strip(",")
 
 producer = KafkaProducer(
-    # bootstrap_servers=["localhost:9092", "localhost:9093", "localhost:9094"],
-    bootstrap_servers=["localhost:29092", "localhost:39092", "localhost:49092"],
+    bootstrap_servers=BOOTSTRAP_SERVERS,
     value_serializer=lambda v: json.dumps(v).encode("utf-8"),
 )
+
+register_service("facade-service", 1, FACADE_PORT)
+atexit.register(lambda: deregister_service("facade-service", 1, FACADE_PORT))
 
 @app.route("/facade-service", methods=["GET"])
 def get():
@@ -26,21 +32,11 @@ def get():
     """
     result_message = ""
     retry_attempts = 3
-    count = 10
+    logging_url = choose_service("logging-service")
+    messages_url = choose_service("messages-service")
 
-    config_url_logging = CONFIG_URL + "?service_name=logging"
-    config_url_messages = CONFIG_URL + "?service_name=messages"
-
-    logging_addresses_response = requests.get(config_url_logging, timeout=3)
-    messages_addresses_response = requests.get(config_url_messages, timeout=3)
-
-    logging_addresses = logging_addresses_response.text.split(" , ")
-    messages_addresses = messages_addresses_response.text.split(" , ")
-
-    logging_url = choose_services(logging_addresses, count)
-    messages_url = choose_services(messages_addresses, count)
-    print("Choosed logging in GET: ", logging_url)
-    print("Choosed messages in GET: ", messages_url)
+    print("Choosed logging_url: ", logging_url)
+    print("Choosed messages_url: ", messages_url)
 
     while retry_attempts > 0:
         try:
@@ -96,17 +92,12 @@ def post():
     Handling POST request from client + Retry logic.
     """
     retry_attempts = 3
-    count = 10
     message = request.get_data(as_text=True)
     random_uuid = uuid.uuid4()
     data = {"uuid": str(random_uuid), "message": message}
     headers = {"Content-type": "application/json"}
-
-    config_url_logging = CONFIG_URL + "?service_name=logging"
-    logging_addresses_response = requests.get(config_url_logging, timeout=3)
-    logging_addresses = logging_addresses_response.text.split(" , ")
-    logging_url = choose_services(logging_addresses, count)
-    print("Choosed logging in POST: ", logging_url)
+    logging_url = choose_service("logging-service")
+    print("Choosed logging_url: ", logging_url)
 
     while retry_attempts > 0:
         try:
@@ -115,7 +106,6 @@ def post():
             producer.send(TOPIC_NAME, value=data)
             print(f"Sent to message queue: {data}")
             producer.flush()
-            # producer.close()
 
             if (logging_response.status_code == 200):
                 return "", 200
@@ -139,20 +129,24 @@ def post():
     )
 
 
-def choose_services(list, count):
-    while count > 0:
-        url = random.choice(list)
-        count -= 1
-        try:
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                count = 10
-                return url
-        except requests.RequestException as e:
-            print(
-                f"Service at {url} is down. Error: {e}. Trying another service."
-            )
-    print(f"All services is down.")
+def choose_service(service_name):
+    """
+    Function to choose a service dynamically from Consul.
+    """
+    consul = Consul()
+    health_services = consul.health.service(service_name)
+    health_services = [
+        "http://"
+        + str(elem["Service"]["Address"])
+        + ":"
+        + str(elem["Service"]["Port"])
+        + "/"
+        + elem["Service"]["Service"]
+        for elem in health_services[1]
+    ]
+    print("health_services: ", health_services)
+    return random.choice(health_services)
+
 
 if __name__ == "__main__":
     app.run(debug=True)

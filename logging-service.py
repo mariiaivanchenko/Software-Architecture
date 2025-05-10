@@ -1,15 +1,20 @@
+import atexit
 import hazelcast
 import configparser
 from flask import Flask, request
+from utils import register_service, deregister_service, read_element_kv
 
 app = Flask(__name__)
 
 config = configparser.ConfigParser()
 config.read("configuration.ini")
 
-CLUSTER_NAME = config.get("HAZELCAST", "CLUSTER_NAME").strip("")
-CLUSTER_MEMBERS = [member.strip().strip('"') for member in config.get("HAZELCAST", "CLUSTER_MEMBERS").split(" , ")]
 MEMBER_ID = int(config.get("HAZELCAST", "MEMBER_ID"))
+LOGGING_PORT = int(config.get("PORTS", "LOGGING_PORT"))
+register_service("logging-service", MEMBER_ID, LOGGING_PORT + MEMBER_ID)
+atexit.register(lambda: deregister_service("logging-service", MEMBER_ID, LOGGING_PORT + MEMBER_ID))
+CLUSTER_NAME = read_element_kv("app/hazelcast/cluster-name")
+CLUSTER_MEMBERS = read_element_kv("app/hazelcast/cluster-members").split(",")
 
 node = CLUSTER_MEMBERS[MEMBER_ID]
 
@@ -25,7 +30,6 @@ client = hazelcast.HazelcastClient(
 )
 
 distributed_map = client.get_map("distributed-map").blocking()
-
 
 @app.route("/logging-service", methods=["GET"])
 def get():
@@ -52,7 +56,6 @@ def post():
 
     if message_entity["uuid"] not in distributed_map.values():
         if message_entity["message"] not in distributed_map.values():
-            # db[message_entity["uuid"]] = message_entity["message"]
             distributed_map.put(message_entity["uuid"], message_entity["message"])
             print("Recieved messages for logging: ", message_entity["message"])
     return "", 200

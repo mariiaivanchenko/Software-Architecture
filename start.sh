@@ -1,7 +1,5 @@
 #!/bin/bash
 
-LOGGING_START_PORT=5001
-MESSAGES_START_PORT=5004
 HAZELCAST_BIN_PATH=/Users/mariia/hazelcast-5.5.0/bin
 HAZELCAST_XML_PATH=/Users/mariia/hazelcast-5.5.0/config/hazelcast.xml
 
@@ -26,30 +24,30 @@ load_config() {
 
 
 start_services() {
+    echo "Running utils..."
+    python3 utils.py &
+
     echo "Starting services..."
     # facade
-    flask --app facade-service run --port=$PORTS_FACADE_PORT &
+    flask --app facade-service run --host 127.0.0.1 --port=5000 &
 
     # logging
     echo "Starting logging services..."
     for i in `seq 0 2`;
     do
-        port=$(($LOGGING_START_PORT + $i))
-        flask --app logging-service run --port=$port &
+        port=$((5010 + $i))
+        flask --app logging-service run --host 127.0.0.1 --port=$port &
         sleep 3
     done
 
     # messages
-    # echo "Starting messages services..."
-    # for i in `seq 0 1`;
-    # do
-    #     port=$(($MESSAGES_START_PORT + $i))
-    #     flask --app messages-service run --port=$port &
-    #     sleep 3
-    # done
-
-    # config
-    flask --app config-server run --port=$PORTS_CONFIG_PORT &
+    echo "Starting messages services..."
+    for i in `seq 0 1`;
+    do
+        port=$((5004 + $i))
+        flask --app messages-service run --host 127.0.0.1 --port=$port &
+        sleep 3
+    done
 }
 
 
@@ -68,7 +66,7 @@ start_docker() {
     docker exec -it broker-1 /opt/kafka/bin/kafka-topics.sh \
     --bootstrap-server broker-1:19092,broker-2:19092,broker-3:19092 \
     --list
-    docker exec -it broker-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server broker-1:19092,broker-2:19092,broker-3:19092 --create --topic $KAFKA_TOPIC_NAME --partitions 1 --replication-factor 3
+    docker exec -it broker-1 /opt/kafka/bin/kafka-topics.sh --bootstrap-server broker-1:19092,broker-2:19092,broker-3:19092 --create --topic messages-topic --partitions 1 --replication-factor 3
 }
 
 
