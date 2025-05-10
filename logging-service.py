@@ -1,8 +1,13 @@
-import atexit
+import signal
 import hazelcast
 import configparser
+from functools import partial
 from flask import Flask, request
-from utils import register_service, deregister_service, read_element_kv
+from utils import (
+    register_service,
+    read_element_kv,
+    handle_term_signal,
+)
 
 app = Flask(__name__)
 
@@ -12,7 +17,10 @@ config.read("configuration.ini")
 MEMBER_ID = int(config.get("HAZELCAST", "MEMBER_ID"))
 LOGGING_PORT = int(config.get("PORTS", "LOGGING_PORT"))
 register_service("logging-service", MEMBER_ID, LOGGING_PORT + MEMBER_ID)
-atexit.register(lambda: deregister_service("logging-service", MEMBER_ID, LOGGING_PORT + MEMBER_ID))
+signal.signal(
+    signal.SIGTERM,
+    partial(handle_term_signal, "logging-service", MEMBER_ID, LOGGING_PORT + MEMBER_ID),
+)
 CLUSTER_NAME = read_element_kv("app/hazelcast/cluster-name")
 CLUSTER_MEMBERS = read_element_kv("app/hazelcast/cluster-members").split(",")
 

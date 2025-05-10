@@ -1,18 +1,22 @@
 import configparser
 from consul import Consul
 
+import sys
+
+
 config = configparser.ConfigParser()
 config.read("configuration.ini")
 CONSUL_URL = config.get("URLS", "CONSUL_URL")
 
+
 def register_service(service_name, member_id, port):
-    """
-    Function to register services to consul.
-    """
     consul = Consul()
+
+    service_id = f"{service_name}-{member_id}-{port}"
+
     consul.agent.service.register(
-        name=f"{service_name}",
-        service_id=f"{service_name}-{member_id}-{port}",
+        name=service_name,
+        service_id=service_id,
         address="127.0.0.1",
         port=port,
     )
@@ -23,7 +27,16 @@ def deregister_service(service_name, member_id, port):
     Function to deregister services from consul.
     """
     сonsul = Consul()
-    сonsul.agent.service.deregister(f"{service_name}-{member_id}-{port}")
+    service_id = f"{service_name}-{member_id}-{port}"
+    сonsul.agent.service.deregister(service_id)
+
+
+def handle_term_signal(service_name, member_id, port, signal, frame):
+    """
+    Handle SIGTERM (graceful shutdown) and deregister the service.
+    """
+    deregister_service(service_name, member_id, port)
+    sys.exit(0)
 
 
 def save_element_kv(key, element):

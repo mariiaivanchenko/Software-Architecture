@@ -1,13 +1,14 @@
 import uuid
 import json
-import atexit
+import signal
 import random
 import requests
 import configparser
 from consul import Consul
+from functools import partial
 from kafka import KafkaProducer
 from flask import Flask, request
-from utils import register_service, deregister_service, read_element_kv
+from utils import register_service, handle_term_signal, read_element_kv
 
 app = Flask(__name__)
 
@@ -23,7 +24,10 @@ producer = KafkaProducer(
 )
 
 register_service("facade-service", 1, FACADE_PORT)
-atexit.register(lambda: deregister_service("facade-service", 1, FACADE_PORT))
+signal.signal(
+    signal.SIGTERM,
+    partial(handle_term_signal, "facade-service", 1, FACADE_PORT),
+)
 
 @app.route("/facade-service", methods=["GET"])
 def get():

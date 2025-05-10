@@ -4,7 +4,7 @@
 POST {{FACADE_URL}}
 Content-Type: text/plain
 
-msg4
+msg1
 
 ### GET request for facade-service
 GET {{FACADE_URL}}

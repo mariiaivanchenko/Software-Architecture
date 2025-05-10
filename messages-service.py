@@ -1,10 +1,11 @@
 import json
-import atexit
+import signal
 import threading
 import configparser
 from flask import Flask
+from functools import partial
 from kafka import KafkaConsumer
-from utils import register_service, deregister_service, read_element_kv
+from utils import register_service, handle_term_signal, read_element_kv
 
 app = Flask(__name__)
 db = {}
@@ -41,12 +42,12 @@ def consume_messages():
 threading.Thread(target=consume_messages, daemon=True).start()
 
 register_service("messages-service", MEMBER_ID, MESSAGES_PORT + MEMBER_ID - 1)
-atexit.register(
-    lambda: deregister_service(
-        "messages-service", MEMBER_ID, MESSAGES_PORT + MEMBER_ID - 1
-    )
+signal.signal(
+    signal.SIGTERM,
+    partial(
+        handle_term_signal, "messages-service", MEMBER_ID, MESSAGES_PORT + MEMBER_ID - 1
+    ),
 )
-
 
 @app.route("/messages-service", methods=["GET"])
 def get():

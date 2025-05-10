@@ -35,7 +35,7 @@ start_services() {
     echo "Starting logging services..."
     for i in `seq 0 2`;
     do
-        port=$((5010 + $i))
+        port=$((5001 + $i))
         flask --app logging-service run --host 127.0.0.1 --port=$port &
         sleep 3
     done
